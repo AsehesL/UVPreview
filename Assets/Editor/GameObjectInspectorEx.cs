@@ -7,15 +7,20 @@ using UnityEditor;
 public class GameObjectInspectorEx : Editor
 {
     private Editor m_GameObjectInspector;
-
+    
     private string[] m_PreviewModeDesc = new string[] {"模型", "UV1", "UV2", "UV3", "UV4"};
-
+    
     private int m_PreviewMode;
+
+    [SerializeField] private UVPreview m_UVPreview;
 
     void OnEnable()
     {
         System.Type gameObjectorInspectorType = typeof (Editor).Assembly.GetType("UnityEditor.GameObjectInspector");
         m_GameObjectInspector = Editor.CreateEditor(target, gameObjectorInspectorType);
+        m_UVPreview = new UVPreview();
+        if (target)
+            m_UVPreview.Add((GameObject) target);
     }
 
     void OnDisable()
@@ -38,10 +43,30 @@ public class GameObjectInspectorEx : Editor
     public override void DrawPreview(Rect previewArea)
     {
         GUI.Box(new Rect(previewArea.x, previewArea.y, previewArea.width, 17), string.Empty, GUI.skin.FindStyle("toolbar"));
+
+        EditorGUI.BeginChangeCheck();
         m_PreviewMode = GUI.Toolbar(new Rect(previewArea.x + 5, previewArea.y, 60*4, 17), m_PreviewMode,
             m_PreviewModeDesc, GUI.skin.FindStyle("toolbarbutton"));
-        m_GameObjectInspector.DrawPreview(new Rect(previewArea.x, previewArea.y + 17, previewArea.width,
-            previewArea.height - 17));
+        if (EditorGUI.EndChangeCheck())
+        {
+            if (m_PreviewMode > 0)
+            {
+                m_UVPreview.currentUVIndex = (UVPreview.UVIndex) (m_PreviewMode - 1);
+            }
+        }
+        if (m_PreviewMode == 0)
+            m_GameObjectInspector.DrawPreview(new Rect(previewArea.x, previewArea.y + 17, previewArea.width,
+                previewArea.height - 17));
+        else
+        {
+            m_UVPreview.DrawPreview(new Rect(previewArea.x, previewArea.y + 17, previewArea.width,
+                previewArea.height - 17));
+        }
+    }
+
+    public override void OnPreviewGUI(Rect r, GUIStyle background)
+    {
+        m_GameObjectInspector.OnPreviewGUI(r, background);
     }
 
     public override string GetInfoString()

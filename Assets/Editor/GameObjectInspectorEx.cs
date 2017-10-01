@@ -20,7 +20,7 @@ public class GameObjectInspectorEx : Editor
         m_GameObjectInspector = Editor.CreateEditor(target, gameObjectorInspectorType);
         m_UVPreview = new UVPreview();
         if (target)
-            m_UVPreview.Add((GameObject) target);
+            m_UVPreview.Add((GameObject) target, true);
     }
 
     void OnDisable()
@@ -28,6 +28,9 @@ public class GameObjectInspectorEx : Editor
         if (m_GameObjectInspector)
             DestroyImmediate(m_GameObjectInspector);
         m_GameObjectInspector = null;
+        if (m_UVPreview != null)
+            m_UVPreview.Release();
+        m_UVPreview = null;
     }
 
     public override void OnInspectorGUI()
@@ -43,24 +46,15 @@ public class GameObjectInspectorEx : Editor
     public override void DrawPreview(Rect previewArea)
     {
         GUI.Box(new Rect(previewArea.x, previewArea.y, previewArea.width, 17), string.Empty, GUI.skin.FindStyle("toolbar"));
-
-        EditorGUI.BeginChangeCheck();
+        
         m_PreviewMode = GUI.Toolbar(new Rect(previewArea.x + 5, previewArea.y, 60*4, 17), m_PreviewMode,
             m_PreviewModeDesc, GUI.skin.FindStyle("toolbarbutton"));
-        if (EditorGUI.EndChangeCheck())
-        {
-            if (m_PreviewMode > 0)
-            {
-                m_UVPreview.currentUVIndex = (UVPreview.UVIndex) (m_PreviewMode - 1);
-            }
-        }
+        Rect previewRect = new Rect(previewArea.x, previewArea.y + 17, previewArea.width, previewArea.height - 17);
         if (m_PreviewMode == 0)
-            m_GameObjectInspector.DrawPreview(new Rect(previewArea.x, previewArea.y + 17, previewArea.width,
-                previewArea.height - 17));
+            m_GameObjectInspector.DrawPreview(previewRect);
         else
         {
-            m_UVPreview.DrawPreview(new Rect(previewArea.x, previewArea.y + 17, previewArea.width,
-                previewArea.height - 17));
+            m_UVPreview.DrawPreview(previewRect, Color.green, (UVPreview.UVIndex) (m_PreviewMode - 1), false);
         }
     }
 

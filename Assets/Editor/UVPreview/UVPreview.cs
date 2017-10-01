@@ -21,10 +21,6 @@ public class UVPreview
     /// </summary>
     public List<UVData> UVDatas { get { return m_UVDatas; } }
     /// <summary>
-    /// 当前UV索引
-    /// </summary>
-    public UVIndex currentUVIndex;
-    /// <summary>
     /// UV托盘坐标
     /// </summary>
     public Vector2 uvPanelPosition = Vector2.zero;
@@ -45,16 +41,14 @@ public class UVPreview
     /// </summary>
     public bool lightMapLayoutMode;
     /// <summary>
-    /// 是否渲染顶点色
-    /// </summary>
-    public bool renderVertexColor;
-    /// <summary>
     /// 棋盘格：UV托盘背景
     /// </summary>
+    [SerializeField]
     private Mesh m_CheckerBoard;
     /// <summary>
     /// 棋盘格材质
     /// </summary>
+    [SerializeField]
     private Material m_CheckerBoardMaterial;
 
     private bool m_IsDragging;
@@ -62,8 +56,10 @@ public class UVPreview
     /// 描边材质
     /// TODO OpenGL es2.0渲染模式下可能不支持
     /// </summary>
+    [SerializeField]
     private Material m_BoardLineMaterial;
 
+    [SerializeField]
     private List<UVData> m_UVDatas = new List<UVData>();
 
     private const string kCheckerBoardShader = "Hidden/Internal/GUI/CheckerBoard";
@@ -89,12 +85,7 @@ public class UVPreview
 
     public void Release()
     {
-        foreach (UVData uvdata in m_UVDatas)
-        {
-            uvdata.Release();
-        }
-        m_UVDatas.Clear();
-        m_UVDatas = null;
+        Clear();
         if (m_CheckerBoard)
             Object.DestroyImmediate(m_CheckerBoard);
         if (m_CheckerBoardMaterial)
@@ -106,27 +97,47 @@ public class UVPreview
         m_CheckerBoardMaterial = null;
     }
 
-    public void Add(GameObject gameObject)
+    public void Add(GameObject gameObject, bool containChilds)
     {
-        GameObject go = GetRender(gameObject);
-        if (go && go.activeSelf)
+        if (containChilds)
         {
-            UVData uvData = UVData.CreateUVData(go);
-            if (uvData != null)
-                m_UVDatas.Add(uvData);
+            var collect = GetRenderers(gameObject);
+            if (collect != null)
+            {
+                for (int i = 0; i < collect.Count; i++)
+                {
+                    var go = GetRender(collect[i]);
+                    CreateUVData(go);
+                }
+            }
         }
+        else
+        {
+            GameObject go = GetRender(gameObject);
+            CreateUVData(go);
+        }
+    }
+
+    public void Clear()
+    {
+        foreach (UVData uvdata in m_UVDatas)
+        {
+            uvdata.Release();
+        }
+        m_UVDatas.Clear();
+        m_UVDatas = null;
     }
 
     /// <summary>
     /// 绘制UV界面
     /// </summary>
     /// <param name="rect"></param>
-    public void DrawPreview(Rect rect)
+    public void DrawPreview(Rect rect, Color color, UVIndex uvIndex, bool drawVertexColor)
     {
         DrawCheckerBoard(rect);//绘制棋盘格
-        if (renderVertexColor)
-            DrawUV(rect, (int)currentUVIndex, 1);//绘制顶点色
-        DrawUV(rect, (int)currentUVIndex, 0);//绘制UV
+        if (drawVertexColor)
+            DrawVertexColor(rect, (int)uvIndex);//绘制顶点色
+        DrawUV(rect, (int)uvIndex, color);//绘制UV
         ListenEvent(rect);
     }
 
@@ -142,7 +153,7 @@ public class UVPreview
     /// 改变贴图
     /// </summary>
     /// <param name="texture"></param>
-    public void ChangeTexture(Texture2D texture)
+    public void SetTexture(Texture2D texture)
     {
         if (texture)
         {
@@ -156,7 +167,7 @@ public class UVPreview
     /// </summary>
     /// <param name="lightMapIndex">光照贴图索引</param>
     /// <param name="directional">是否为方向光照贴图</param>
-    public void ChangeLightMap(int lightMapIndex, bool directional)
+    public void SetLightMap(int lightMapIndex, bool directional)
     {
         LightMapIndex = lightMapIndex;
         DirectionalLightMap = directional;
@@ -165,9 +176,9 @@ public class UVPreview
             LightmapData md = LightmapSettings.lightmaps[LightMapIndex];
             lightMapLayoutMode = true;
             if (DirectionalLightMap)
-                ChangeTexture(md.lightmapDir);
+                SetTexture(md.lightmapDir);
             else
-                ChangeTexture(md.lightmapColor);
+                SetTexture(md.lightmapColor);
         }
     }
 
@@ -195,13 +206,23 @@ public class UVPreview
         Graphics.DrawMeshNow(m_CheckerBoard, matrix);
     }
 
+    private void DrawUV(Rect rect, int uvID, Color color)
+    {
+        m_BoardLineMaterial.SetColor("_Color", color);
+        DrawUVMesh(rect, uvID, 0);
+    }
+
+    private void DrawVertexColor(Rect rect, int uvID)
+    {
+        DrawUVMesh(rect, uvID, 1);
+    }
+
     /// <summary>
     /// 绘制UV
     /// </summary>
     /// <param name="rect"></param>
     /// <param name="uvID">UVID</param>
-    /// <param name="pass">绘制Shader的Pass（Pass0绘制边框，Pass1绘制顶点色）</param>
-    private void DrawUV(Rect rect, int uvID, int pass)
+    private void DrawUVMesh(Rect rect, int uvID, int pass)
     {
 
         Matrix4x4 matrix = default(Matrix4x4);
@@ -217,8 +238,6 @@ public class UVPreview
                 continue;
             if (m_UVDatas[i].target == null)
                 continue;
-            Color col = m_UVDatas[i].color;
-            m_BoardLineMaterial.SetColor("_Color", col);
             m_BoardLineMaterial.SetPass(pass);
             Mesh mesh = null;
             if (lightMapLayoutMode)
@@ -244,6 +263,16 @@ public class UVPreview
         }
     }
 
+    private void CreateUVData(GameObject gameObject)
+    {
+        if (gameObject && gameObject.activeSelf)
+        {
+            UVData uvData = UVData.CreateUVData(gameObject);
+            if (uvData != null)
+                m_UVDatas.Add(uvData);
+        }
+    }
+
     private GameObject GetRender(GameObject gameObject)
     {
         SkinnedMeshRenderer skinned = gameObject.GetComponent<SkinnedMeshRenderer>();
@@ -255,6 +284,28 @@ public class UVPreview
         return null;
     }
 
+    private List<GameObject> GetRenderers(GameObject gameObject, List<GameObject> collect = null)
+    {
+        if (gameObject == null)
+            return collect;
+        var go = GetRender(gameObject);
+        if (go != null)
+        {
+            if (collect == null)
+                collect = new List<GameObject>();
+            collect.Add(go);
+        }
+        if (gameObject.transform.childCount > 0)
+        {
+            for (int i = 0; i < gameObject.transform.childCount; i++)
+            {
+                var child = gameObject.transform.GetChild(i);
+                collect = GetRenderers(child.gameObject, collect);
+            }
+        }
+        return collect;
+    }
+
     private void ListenEvent(Rect rect)
     {
         if (Event.current.type == EventType.MouseDown && Event.current.button == 2)
@@ -262,7 +313,6 @@ public class UVPreview
             if (rect.Contains(Event.current.mousePosition))
             {
                 m_IsDragging = true;
-                //Event.current.type = EventType.Repaint;
                 Event.current.Use();
             }
         }
@@ -272,14 +322,12 @@ public class UVPreview
             {
                 float dt = Event.current.delta.y;
                 uvPanelScale -= Vector2.one * dt * 0.03f;
-                //Event.current.type = EventType.Repaint;
                 Event.current.Use();
             }
         }
         if (Event.current.type == EventType.MouseDrag && m_IsDragging)
         {
             uvPanelPosition += Event.current.delta;
-            //Event.current.type = EventType.Repaint;
             Event.current.Use();
         }
         if (Event.current.type == EventType.MouseUp && m_IsDragging)

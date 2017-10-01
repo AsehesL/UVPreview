@@ -31,15 +31,16 @@ public class UVPreview
     /// <summary>
     /// 当前光照贴图索引
     /// </summary>
-    public int LightMapIndex { get; private set; }
+    public int LightMapIndex { get { return m_LightMapIndex; } }
     /// <summary>
     /// 是否绘制方向光照贴图
     /// </summary>
-    public bool DirectionalLightMap { get; private set; }
+    public bool DirectionalLightMap { get { return m_DirectionalLightMap; } }
     /// <summary>
     /// 光照贴图布局模式：默认为仅绘制物体UV，开启光照贴图布局将使用LightMapOffsetScale来显示UV在光照贴图上的位置
     /// </summary>
-    public bool lightMapLayoutMode;
+    [SerializeField]
+    private bool m_LightMapLayoutMode;
     /// <summary>
     /// 棋盘格：UV托盘背景
     /// </summary>
@@ -52,6 +53,12 @@ public class UVPreview
     private Material m_CheckerBoardMaterial;
 
     private bool m_IsDragging;
+
+    [SerializeField]
+    private int m_LightMapIndex;
+
+    [SerializeField]
+    private bool m_DirectionalLightMap;
     /// <summary>
     /// 描边材质
     /// TODO OpenGL es2.0渲染模式下可能不支持
@@ -65,7 +72,7 @@ public class UVPreview
     private const string kCheckerBoardShader = "Hidden/Internal/GUI/CheckerBoard";
     private const string kBoardLineShader = "Hidden/Internal/GUI/BoardLine";
 
-    public UVPreview(bool lightMapMode = false)
+    public UVPreview()
     {
         m_CheckerBoardMaterial = new Material(Shader.Find(kCheckerBoardShader));
         m_CheckerBoardMaterial.hideFlags = HideFlags.HideAndDontSave;
@@ -80,7 +87,7 @@ public class UVPreview
         {new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0)};
         m_CheckerBoard.triangles = new int[] { 0, 1, 2, 0, 2, 3 };
         m_CheckerBoard.hideFlags = HideFlags.HideAndDontSave;
-        this.lightMapLayoutMode = lightMapMode;
+        this.m_LightMapLayoutMode = false;
     }
 
     public void Release()
@@ -146,6 +153,7 @@ public class UVPreview
     /// </summary>
     public void ClearTexture()
     {
+        m_LightMapLayoutMode = false;
         m_CheckerBoardMaterial.SetFloat("_Alpha", 0);
     }
 
@@ -155,11 +163,8 @@ public class UVPreview
     /// <param name="texture"></param>
     public void SetTexture(Texture2D texture)
     {
-        if (texture)
-        {
-            m_CheckerBoardMaterial.SetTexture("_MainTex", texture);
-            m_CheckerBoardMaterial.SetFloat("_Alpha", 1);
-        }
+        m_LightMapLayoutMode = false;
+        SetTextureInternal(texture);
     }
 
     /// <summary>
@@ -169,16 +174,16 @@ public class UVPreview
     /// <param name="directional">是否为方向光照贴图</param>
     public void SetLightMap(int lightMapIndex, bool directional)
     {
-        LightMapIndex = lightMapIndex;
-        DirectionalLightMap = directional;
+        m_LightMapIndex = lightMapIndex;
+        m_DirectionalLightMap = directional;
         if (LightMapIndex >= 0 && LightMapIndex < LightmapSettings.lightmaps.Length)
         {
             LightmapData md = LightmapSettings.lightmaps[LightMapIndex];
-            lightMapLayoutMode = true;
+            m_LightMapLayoutMode = true;
             if (DirectionalLightMap)
-                SetTexture(md.lightmapDir);
+                SetTextureInternal(md.lightmapDir);
             else
-                SetTexture(md.lightmapColor);
+                SetTextureInternal(md.lightmapColor);
         }
     }
 
@@ -217,6 +222,15 @@ public class UVPreview
         DrawUVMesh(rect, uvID, 1);
     }
 
+    private void SetTextureInternal(Texture texture)
+    {
+        if (texture)
+        {
+            m_CheckerBoardMaterial.SetTexture("_MainTex", texture);
+            m_CheckerBoardMaterial.SetFloat("_Alpha", 1);
+        }
+    }
+
     /// <summary>
     /// 绘制UV
     /// </summary>
@@ -230,7 +244,7 @@ public class UVPreview
         m_BoardLineMaterial.SetMatrix("clipMatrix", GetGUIClipMatrix(rect));
 
         //非光照贴图布局模式下直接计算绘制矩阵
-        if (!lightMapLayoutMode)
+        if (!m_LightMapLayoutMode)
             matrix = RefreshMatrix(rect);
         for (int i = 0; i < m_UVDatas.Count; i++)
         {
@@ -240,7 +254,7 @@ public class UVPreview
                 continue;
             m_BoardLineMaterial.SetPass(pass);
             Mesh mesh = null;
-            if (lightMapLayoutMode)
+            if (m_LightMapLayoutMode)
             {
                 //光照贴图布局模式下需要根据每个Renderer的LightMapScaleOffset来计算绘制矩阵
                 Renderer renderer = m_UVDatas[i].target.GetComponent<Renderer>();

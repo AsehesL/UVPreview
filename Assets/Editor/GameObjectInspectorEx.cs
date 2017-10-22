@@ -25,7 +25,6 @@ public class GameObjectInspectorEx : Editor
     private GUIContent m_TexContent;
 
     private MethodInfo m_OnHeaderGUI;
-    private System.Object[] m_OnHeaderGUIArgs = new object[] {};
 
     private int m_RendersCount = 0;
 
@@ -59,7 +58,7 @@ public class GameObjectInspectorEx : Editor
     {
         if (m_OnHeaderGUI != null)
         {
-            m_OnHeaderGUI.Invoke(m_GameObjectInspector, m_OnHeaderGUIArgs);
+            m_OnHeaderGUI.Invoke(m_GameObjectInspector, null);
         }
     }
 

@@ -27,6 +27,8 @@ public class GameObjectInspectorEx : Editor
     private MethodInfo m_OnHeaderGUI;
     private System.Object[] m_OnHeaderGUIArgs = new object[] {};
 
+    private int m_RendersCount = 0;
+
     void OnEnable()
     {
         System.Type gameObjectorInspectorType = typeof (Editor).Assembly.GetType("UnityEditor.GameObjectInspector");
@@ -38,6 +40,9 @@ public class GameObjectInspectorEx : Editor
             m_UVPreview.Add((GameObject) target, true);
         m_Textures = CollectTextures((GameObject) target);
         m_TexContent = new GUIContent("贴图");
+
+        Renderer[] renderers = ((GameObject) target).GetComponentsInChildren<Renderer>();
+        m_RendersCount = renderers.Length;
     }
 
     void OnDisable()
@@ -65,13 +70,15 @@ public class GameObjectInspectorEx : Editor
 
     public override bool HasPreviewGUI()
     {
-        return true;
-        //return m_GameObjectInspector.HasPreviewGUI();
+        if (m_GameObjectInspector.HasPreviewGUI())
+            return true;
+        return m_RendersCount > 0;
     }
 
 
     public override void DrawPreview(Rect previewArea)
     {
+        
         GUI.Box(new Rect(previewArea.x, previewArea.y, previewArea.width, 17), string.Empty, GUI.skin.FindStyle("toolbar"));
         
         m_PreviewMode = GUI.Toolbar(new Rect(previewArea.x + 5, previewArea.y, 50*4, 17), m_PreviewMode,

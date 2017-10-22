@@ -69,15 +69,15 @@ public class UVPreview
     [SerializeField]
     private List<UVData> m_UVDatas = new List<UVData>();
 
-    private const string kCheckerBoardShader = "Hidden/Internal/GUI/CheckerBoard";
-    private const string kBoardLineShader = "Hidden/Internal/GUI/BoardLine";
+    private const string kCheckerBoardShader = "InternalShaders/GUI/CheckerBoard.shader";
+    private const string kBoardLineShader = "InternalShaders/GUI/BoardLine.shader";
 
     public UVPreview()
     {
-        m_CheckerBoardMaterial = new Material(Shader.Find(kCheckerBoardShader));
+        m_CheckerBoardMaterial = new Material(EditorGUIUtility.Load(kCheckerBoardShader) as Shader);
         m_CheckerBoardMaterial.hideFlags = HideFlags.HideAndDontSave;
 
-        m_BoardLineMaterial = new Material(Shader.Find(kBoardLineShader));
+        m_BoardLineMaterial = new Material(EditorGUIUtility.Load(kBoardLineShader) as Shader);
         m_BoardLineMaterial.hideFlags = HideFlags.HideAndDontSave;
 
         m_CheckerBoard = new Mesh();

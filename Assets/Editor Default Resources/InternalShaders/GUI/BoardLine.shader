@@ -21,7 +21,7 @@ Shader "Hidden/Internal/GUI/BoardLine"
 			#pragma geometry geom
 			#pragma fragment frag
 			#pragma exclude_renderers opengl
-			#pragma target 3.0
+			#pragma target 4.0
 
 			#include "UnityCG.cginc"
 

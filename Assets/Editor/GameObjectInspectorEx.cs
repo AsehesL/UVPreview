@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System.Reflection;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
@@ -23,9 +24,14 @@ public class GameObjectInspectorEx : Editor
 
     private GUIContent m_TexContent;
 
+    private MethodInfo m_OnHeaderGUI;
+    private System.Object[] m_OnHeaderGUIArgs = new object[] {};
+
     void OnEnable()
     {
         System.Type gameObjectorInspectorType = typeof (Editor).Assembly.GetType("UnityEditor.GameObjectInspector");
+        m_OnHeaderGUI = gameObjectorInspectorType.GetMethod("OnHeaderGUI",
+            BindingFlags.NonPublic | BindingFlags.Instance);
         m_GameObjectInspector = Editor.CreateEditor(target, gameObjectorInspectorType);
         m_UVPreview = new UVPreview();
         if (target)
@@ -44,6 +50,14 @@ public class GameObjectInspectorEx : Editor
         m_UVPreview = null;
     }
 
+    protected override void OnHeaderGUI()
+    {
+        if (m_OnHeaderGUI != null)
+        {
+            m_OnHeaderGUI.Invoke(m_GameObjectInspector, m_OnHeaderGUIArgs);
+        }
+    }
+
     public override void OnInspectorGUI()
     {
         m_GameObjectInspector.OnInspectorGUI();
@@ -51,8 +65,10 @@ public class GameObjectInspectorEx : Editor
 
     public override bool HasPreviewGUI()
     {
-        return m_GameObjectInspector.HasPreviewGUI();
+        return true;
+        //return m_GameObjectInspector.HasPreviewGUI();
     }
+
 
     public override void DrawPreview(Rect previewArea)
     {

@@ -18,15 +18,23 @@ public class GameObjectInspectorEx : Editor
     /// </summary>
     private Color m_UvColor = Color.green;
 
-    [SerializeField] private UVPreview m_UVPreview;
+    private Texture2D m_CurrentTexture;
+    private int m_CurrentLightMapIndex;
+    private bool m_DisplayLightMap;
 
     private List<Texture2D> m_Textures;
 
     private GUIContent m_TexContent;
+    private GUIContent m_VertexColorContent;
+    private GUIContent m_SaveContent;
 
     private MethodInfo m_OnHeaderGUI;
 
-    private int m_RendersCount = 0;
+    private bool m_HasRenderer = false;
+
+    private bool m_DisplayVertexColor = false;
+
+    private Vector4 m_OffsetScale = new Vector4(0, 0, 1, 1);
 
     void OnEnable()
     {
@@ -34,14 +42,16 @@ public class GameObjectInspectorEx : Editor
         m_OnHeaderGUI = gameObjectorInspectorType.GetMethod("OnHeaderGUI",
             BindingFlags.NonPublic | BindingFlags.Instance);
         m_GameObjectInspector = Editor.CreateEditor(target, gameObjectorInspectorType);
-        m_UVPreview = new UVPreview();
-        if (target)
-            m_UVPreview.Add((GameObject) target, true);
+
         m_Textures = CollectTextures((GameObject) target);
         m_TexContent = new GUIContent("贴图");
+        m_VertexColorContent = new GUIContent("顶点色");
+        m_SaveContent = new GUIContent("保存");
 
-        Renderer[] renderers = ((GameObject) target).GetComponentsInChildren<Renderer>();
-        m_RendersCount = renderers.Length;
+        if (((GameObject) target).GetComponent<SkinnedMeshRenderer>())
+            m_HasRenderer = true;
+        else if (((GameObject) target).GetComponent<MeshRenderer>() && ((GameObject)target).GetComponent<MeshFilter>())
+            m_HasRenderer = true;
     }
 
     void OnDisable()
@@ -49,9 +59,6 @@ public class GameObjectInspectorEx : Editor
         if (m_GameObjectInspector)
             DestroyImmediate(m_GameObjectInspector);
         m_GameObjectInspector = null;
-        if (m_UVPreview != null)
-            m_UVPreview.Release();
-        m_UVPreview = null;
     }
 
     protected override void OnHeaderGUI()
@@ -71,7 +78,7 @@ public class GameObjectInspectorEx : Editor
     {
         if (m_GameObjectInspector.HasPreviewGUI())
             return true;
-        return m_RendersCount > 0;
+        return m_HasRenderer;
     }
 
 
@@ -98,6 +105,15 @@ public class GameObjectInspectorEx : Editor
             {
                 DropDownLightMaps(new Rect(previewArea.x + previewArea.width - 120, previewArea.y, 70, 17));
             }
+
+            m_DisplayVertexColor = GUI.Toggle(new Rect(previewArea.x + previewArea.width - 240, previewArea.y, 50, 17),
+                m_DisplayVertexColor, m_VertexColorContent, GUI.skin.FindStyle("toolbarbutton"));
+
+            if (GUI.Button(new Rect(previewArea.x + previewArea.width - 290, previewArea.y, 50, 17), m_SaveContent, GUI.skin.FindStyle("toolbarbutton")))
+            {
+                SaveUV();
+            }
+
         }
 
         Rect previewRect = new Rect(previewArea.x, previewArea.y + 17, previewArea.width, previewArea.height - 17);
@@ -105,7 +121,7 @@ public class GameObjectInspectorEx : Editor
             m_GameObjectInspector.DrawPreview(previewRect);
         else
         {
-            m_UVPreview.DrawPreview(previewRect, m_UvColor, (UVPreview.UVIndex) (m_PreviewMode - 1), false);
+            m_OffsetScale = UVPreview.DrawUV(previewRect, m_OffsetScale, (GameObject)target, m_PreviewMode - 1, m_DisplayLightMap, m_CurrentLightMapIndex, m_UvColor, m_CurrentTexture, m_DisplayVertexColor);
         }
     }
 
@@ -223,8 +239,9 @@ public class GameObjectInspectorEx : Editor
 
     private void ClearTexture()
     {
-        m_UVPreview.ClearTexture();
+        m_CurrentTexture = null;
         m_TexContent = new GUIContent("贴图");
+        m_DisplayLightMap = false;
     }
 
     private void SelectTexture(System.Object texture)
@@ -233,13 +250,44 @@ public class GameObjectInspectorEx : Editor
             return;
         Texture2D tex = (Texture2D) texture;
         m_TexContent = new GUIContent(tex.name, tex);
-        m_UVPreview.SetTexture(tex);
+        m_DisplayLightMap = false;
+        m_CurrentTexture = tex;
     }
 
     private void SetLightMap(object index)
     {
+        m_TexContent = new GUIContent("贴图");
         LightMapData id = (LightMapData)index;
-        m_UVPreview.SetLightMap(id.index, id.isDirectional);
+
+        m_CurrentLightMapIndex = id.index;
+        if (m_CurrentLightMapIndex >= 0 && m_CurrentLightMapIndex < LightmapSettings.lightmaps.Length)
+        {
+            LightmapData md = LightmapSettings.lightmaps[m_CurrentLightMapIndex];
+            m_DisplayLightMap = true;
+            if (id.isDirectional)
+                m_CurrentTexture = md.lightmapDir;
+            else
+                m_CurrentTexture = md.lightmapColor;
+        }
+        else
+        {
+            m_DisplayLightMap = false;
+        }
+    }
+
+    private void SaveUV()
+    {
+        string path = EditorUtility.SaveFilePanel("保存UV", "", "", "png");
+        if(string.IsNullOrEmpty(path))
+            return;
+
+        var result = UVPreview.RenderUV((GameObject) target, m_PreviewMode - 1, m_UvColor);
+        byte[] buffer = result.EncodeToPNG();
+        System.IO.File.WriteAllBytes(path, buffer);
+
+        path = FileUtil.GetProjectRelativePath(path);
+        if (string.IsNullOrEmpty(path) == false)
+            AssetDatabase.ImportAsset(path);
     }
 
     private struct LightMapData

@@ -1,12 +1,9 @@
-﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
-
-// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
-
-Shader "Hidden/Internal/GUI/BoardLine"
+﻿Shader "Hidden/Internal/GUI/UVRender"
 {
 	Properties
 	{
 		_Color ("Color", color) = (0,1,0,1)
+		_UVIndex ("UVIndex", float) = 0.5
 	}
 	SubShader
 	{
@@ -28,6 +25,10 @@ Shader "Hidden/Internal/GUI/BoardLine"
 			struct appdata
 			{
 				float4 vertex : POSITION;
+				float2 texcoord : TEXCOORD0;
+				float2 texcoord2 : TEXCOORD1;
+				float2 texcoord3 : TEXCOORD2;
+				float2 texcoord4 : TEXCOORD3;
 			};
 
 			struct v2g
@@ -42,17 +43,32 @@ Shader "Hidden/Internal/GUI/BoardLine"
 			};
 
 			float4 _Color;
+			float _UVIndex;
 			uniform float4x4 clipMatrix;
 
 			v2g vert(appdata v)
 			{
 				v2g o;
-				o.vertex = UnityObjectToClipPos(v.vertex);
-				o.worldPos = mul(unity_ObjectToWorld, v.vertex);
+				if (_UVIndex < 0.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord.xy, 0, 1));
+				}
+				else if (_UVIndex >= 0.5 && _UVIndex < 1.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord2.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord2.xy, 0, 1));
+				}
+				else if (_UVIndex >= 1.5 && _UVIndex < 2.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord3.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord3.xy, 0, 1));
+				}
+				else if (_UVIndex >= 2.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord4.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord4.xy, 0, 1));
+				}
 				return o;
 			}
 
-			[maxvertexcount(5)]
+			[maxvertexcount(6)]
 			void geom(triangle v2g i[3], inout LineStream<g2f> os)
 			{
 				g2f o;
@@ -65,10 +81,6 @@ Shader "Hidden/Internal/GUI/BoardLine"
 				o.worldPos = i[1].worldPos;
 				os.Append(o);
 
-				o.vertex = i[2].vertex;
-				o.worldPos = i[2].worldPos;
-				os.Append(o);
-
 				os.RestartStrip();
 
 				o.vertex = i[0].vertex;
@@ -78,6 +90,18 @@ Shader "Hidden/Internal/GUI/BoardLine"
 				o.vertex = i[2].vertex;
 				o.worldPos = i[2].worldPos;
 				os.Append(o);
+
+				os.RestartStrip();
+
+				o.vertex = i[1].vertex;
+				o.worldPos = i[1].worldPos;
+				os.Append(o);
+
+				o.vertex = i[2].vertex;
+				o.worldPos = i[2].worldPos;
+				os.Append(o);
+
+				os.RestartStrip();
 		
 			}
 
@@ -106,6 +130,10 @@ Shader "Hidden/Internal/GUI/BoardLine"
 			{
 				float4 vertex : POSITION;
 				float4 color : COLOR;
+				float2 texcoord : TEXCOORD0;
+				float2 texcoord2 : TEXCOORD1;
+				float2 texcoord3 : TEXCOORD2;
+				float2 texcoord4 : TEXCOORD3;
 			};
 
 			struct v2f
@@ -116,13 +144,28 @@ Shader "Hidden/Internal/GUI/BoardLine"
 			};
 
 			uniform float4x4 clipMatrix;
+			float _UVIndex;
 
 			v2f vert(appdata v)
 			{
 				v2f o;
-				o.vertex = UnityObjectToClipPos(v.vertex);
+				if (_UVIndex < 0.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord.xy, 0, 1));
+				}
+				else if (_UVIndex >= 0.5 && _UVIndex < 1.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord2.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord2.xy, 0, 1));
+				}
+				else if (_UVIndex >= 1.5 && _UVIndex < 2.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord3.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord3.xy, 0, 1));
+				}
+				else if (_UVIndex >= 2.5) {
+					o.vertex = UnityObjectToClipPos(float4(v.texcoord4.xy, 0, 1));
+					o.worldPos = mul(unity_ObjectToWorld, float4(v.texcoord4.xy, 0, 1));
+				}
 				o.color = v.color;
-				o.worldPos = mul(unity_ObjectToWorld, v.vertex);
 				return o;
 			}
 

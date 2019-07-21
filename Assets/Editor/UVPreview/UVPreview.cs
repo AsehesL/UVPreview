@@ -2,373 +2,317 @@
 using UnityEditor;
 using System.Collections.Generic;
 
-[System.Serializable]
 public class UVPreview
 {
     /// <summary>
-    /// UV索引
+    /// 棋盘格材质
     /// </summary>
-    public enum UVIndex
-    {
-        UV,
-        UV2,
-        UV3,
-        UV4,
-    }
+    private static Material sCheckerBoardMaterial;
+    /// <summary>
+    /// UV材质
+    /// </summary>
+    private static Material sUVMaterial;
 
-    /// <summary>
-    /// UVData列表
-    /// </summary>
-    public List<UVData> UVDatas { get { return m_UVDatas; } }
-    /// <summary>
-    /// UV托盘坐标
-    /// </summary>
-    public Vector2 uvPanelPosition = Vector2.zero;
-    /// <summary>
-    /// UV托盘缩放
-    /// </summary>
-    public Vector2 uvPanelScale = Vector2.one;
-    /// <summary>
-    /// 当前光照贴图索引
-    /// </summary>
-    public int LightMapIndex { get { return m_LightMapIndex; } }
-    /// <summary>
-    /// 是否绘制方向光照贴图
-    /// </summary>
-    public bool DirectionalLightMap { get { return m_DirectionalLightMap; } }
-    /// <summary>
-    /// 光照贴图布局模式：默认为仅绘制物体UV，开启光照贴图布局将使用LightMapOffsetScale来显示UV在光照贴图上的位置
-    /// </summary>
-    [SerializeField]
-    private bool m_LightMapLayoutMode;
     /// <summary>
     /// 棋盘格：UV托盘背景
     /// </summary>
-    [SerializeField]
-    private Mesh m_CheckerBoard;
-    /// <summary>
-    /// 棋盘格材质
-    /// </summary>
-    [SerializeField]
-    private Material m_CheckerBoardMaterial;
+    private static Mesh sCheckerBoard;
 
-    private bool m_IsDragging;
+    private static Material CheckerBoardMaterial
+    {
+        get
+        {
+            if (sCheckerBoardMaterial == null)
+            {
+                sCheckerBoardMaterial = new Material(EditorGUIUtility.Load(kCheckerBoardShader) as Shader);
+                sCheckerBoardMaterial.hideFlags = HideFlags.HideAndDontSave;
+            }
 
-    [SerializeField]
-    private int m_LightMapIndex;
+            return sCheckerBoardMaterial;
+        }
+    }
 
-    [SerializeField]
-    private bool m_DirectionalLightMap;
-    /// <summary>
-    /// 描边材质
-    /// TODO OpenGL es2.0渲染模式下可能不支持
-    /// </summary>
-    [SerializeField]
-    private Material m_BoardLineMaterial;
+    private static Material UVMaterial
+    {
+        get
+        {
+            if (sUVMaterial == null)
+            {
+                sUVMaterial = new Material(EditorGUIUtility.Load(kUVShader) as Shader);
+                sUVMaterial.hideFlags = HideFlags.HideAndDontSave;
+            }
 
-    [SerializeField]
-    private List<UVData> m_UVDatas = new List<UVData>();
+            return sUVMaterial;
+        }
+    }
+
+    private static Mesh CheckerBoard
+    {
+        get {
+            if (sCheckerBoard == null)
+            {
+                sCheckerBoard = new Mesh();
+                sCheckerBoard.vertices = new Vector3[]
+                {new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0)};
+                sCheckerBoard.uv = new Vector2[]
+                {new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0)};
+                sCheckerBoard.triangles = new int[] { 0, 1, 2, 0, 2, 3 };
+                sCheckerBoard.hideFlags = HideFlags.HideAndDontSave;
+            }
+
+            return sCheckerBoard;
+        }
+    }
 
     private const string kCheckerBoardShader = "InternalShaders/GUI/CheckerBoard.shader";
-    private const string kBoardLineShader = "InternalShaders/GUI/BoardLine.shader";
+    private const string kUVToTextureShader = "InternalShaders/UVPreview/UVToTexture.shader";
+    private const string kUVShader = "InternalShaders/GUI/UVRender.shader";
 
-    public UVPreview()
+    private class UVPreviewStateInfo
     {
-        m_CheckerBoardMaterial = new Material(EditorGUIUtility.Load(kCheckerBoardShader) as Shader);
-        m_CheckerBoardMaterial.hideFlags = HideFlags.HideAndDontSave;
-
-        m_BoardLineMaterial = new Material(EditorGUIUtility.Load(kBoardLineShader) as Shader);
-        m_BoardLineMaterial.hideFlags = HideFlags.HideAndDontSave;
-
-        m_CheckerBoard = new Mesh();
-        m_CheckerBoard.vertices = new Vector3[]
-        {new Vector3(0, 0, 0), new Vector3(0, 1, 0), new Vector3(1, 1, 0), new Vector3(1, 0, 0)};
-        m_CheckerBoard.uv = new Vector2[]
-        {new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0)};
-        m_CheckerBoard.triangles = new int[] { 0, 1, 2, 0, 2, 3 };
-        m_CheckerBoard.hideFlags = HideFlags.HideAndDontSave;
-        this.m_LightMapLayoutMode = false;
+        public bool isDragging = false;
     }
 
-    public void Release()
+    public static Vector4 DrawUV(Rect rect, Vector4 offsetScale, GameObject gameObject, int uvIndex, bool lightMapLayoutMode, int lightMapIndex, Color color, Texture2D texture, bool drawVertexColor)
     {
-        Clear();
-        if (m_CheckerBoard)
-            Object.DestroyImmediate(m_CheckerBoard);
-        if (m_CheckerBoardMaterial)
-            Object.DestroyImmediate(m_CheckerBoardMaterial);
-        if (m_BoardLineMaterial)
-            Object.DestroyImmediate(m_BoardLineMaterial);
-        m_CheckerBoard = null;
-        m_CheckerBoardMaterial = null;
-        m_CheckerBoardMaterial = null;
-    }
+        int controlID = GUIUtility.GetControlID(FocusType.Passive);
+        var state = (UVPreviewStateInfo)GUIUtility.GetStateObject(
+            typeof(UVPreviewStateInfo),
+            controlID);
 
-    public void Add(GameObject gameObject, bool containChilds)
-    {
-        if (containChilds)
+        switch (Event.current.GetTypeForControl(controlID))
         {
-            var collect = GetRenderers(gameObject);
-            if (collect != null)
-            {
-                for (int i = 0; i < collect.Count; i++)
+            case EventType.Repaint:
+                DrawCheckerBoard(rect, offsetScale, texture);//绘制棋盘格
+                if (drawVertexColor)
+                    DrawVertexColorMesh(rect, offsetScale, gameObject, uvIndex, lightMapLayoutMode, lightMapIndex);//绘制顶点色
+                DrawUVMesh(rect, offsetScale, gameObject, uvIndex, lightMapLayoutMode, lightMapIndex, color);//绘制UV
+                break;
+            case EventType.MouseDown:
+                if (Event.current.button == 2 && rect.Contains(Event.current.mousePosition))
                 {
-                    var go = GetRender(collect[i]);
-                    CreateUVData(go);
+                    state.isDragging = true;
                 }
-            }
+                break;
+            case EventType.ScrollWheel:
+                if (rect.Contains(Event.current.mousePosition))
+                {
+                    float dt = Event.current.delta.y;
+                    offsetScale.z -= dt * 0.03f;
+                    offsetScale.w -= dt * 0.03f;
+                    Event.current.Use();
+                }
+                break;
+            case EventType.MouseDrag:
+                if (state.isDragging)
+                {
+                    offsetScale.x += Event.current.delta.x;
+                    offsetScale.y += Event.current.delta.y;
+                    Event.current.Use();
+                }
+                break;
+            case EventType.MouseUp:
+                if (state.isDragging)
+                {
+                    state.isDragging = false;
+                    Event.current.Use();
+                }
+                break;
         }
-        else
-        {
-            GameObject go = GetRender(gameObject);
-            CreateUVData(go);
-        }
+
+        return offsetScale;
     }
 
-    public void Clear()
+    public static Texture2D RenderUV(GameObject gameObject, int uvIndex, Color color)
     {
-        foreach (UVData uvdata in m_UVDatas)
-        {
-            uvdata.Release();
-        }
-        m_UVDatas.Clear();
-        m_UVDatas = null;
-    }
+        Mesh mesh = GetMesh(gameObject);
+        if (!mesh)
+            return null;
 
-    /// <summary>
-    /// 绘制UV界面
-    /// </summary>
-    /// <param name="rect"></param>
-    public void DrawPreview(Rect rect, Color color, UVIndex uvIndex, bool drawVertexColor)
-    {
-        DrawCheckerBoard(rect);//绘制棋盘格
-        if (drawVertexColor)
-            DrawVertexColor(rect, (int)uvIndex);//绘制顶点色
-        DrawUV(rect, (int)uvIndex, color);//绘制UV
-        ListenEvent(rect);
-    }
+        Material renderMat = new Material(EditorGUIUtility.Load(kUVToTextureShader) as Shader);
+        renderMat.SetColor("_Color", color);
 
-    /// <summary>
-    /// 清除UV托盘的贴图（包括光照图）
-    /// </summary>
-    public void ClearTexture()
-    {
-        m_LightMapLayoutMode = false;
-        m_CheckerBoardMaterial.SetFloat("_Alpha", 0);
-    }
+        if (!CheckUV(mesh, uvIndex))
+            return null;
+        renderMat.SetFloat("_UVIndex", 0.5f + uvIndex);
 
-    /// <summary>
-    /// 改变贴图
-    /// </summary>
-    /// <param name="texture"></param>
-    public void SetTexture(Texture2D texture)
-    {
-        m_LightMapLayoutMode = false;
-        SetTextureInternal(texture);
-    }
+        renderMat.SetPass(0);
 
-    /// <summary>
-    /// 改变光照贴图
-    /// </summary>
-    /// <param name="lightMapIndex">光照贴图索引</param>
-    /// <param name="directional">是否为方向光照贴图</param>
-    public void SetLightMap(int lightMapIndex, bool directional)
-    {
-        m_LightMapIndex = lightMapIndex;
-        m_DirectionalLightMap = directional;
-        if (LightMapIndex >= 0 && LightMapIndex < LightmapSettings.lightmaps.Length)
-        {
-            LightmapData md = LightmapSettings.lightmaps[LightMapIndex];
-            m_LightMapLayoutMode = true;
-            if (DirectionalLightMap)
-                SetTextureInternal(md.lightmapDir);
-            else
-                SetTextureInternal(md.lightmapColor);
-        }
-    }
+        Texture2D result = new Texture2D(1024, 1024);
 
-    /// <summary>
-    /// 重置UV托盘位置
-    /// </summary>
-    public void ResetUVPanel()
-    {
-        uvPanelPosition = Vector2.zero;
-        uvPanelScale = Vector2.one;
+        RenderTexture rt = new RenderTexture(1024, 1024, 24, RenderTextureFormat.ARGBFloat);
+        RenderTexture active = RenderTexture.active;
+
+        RenderTexture.active = rt;
+        GL.Clear(true, true, new Color(0, 0, 0, 0));
+        Graphics.DrawMeshNow(mesh, Matrix4x4.identity);
+        result.ReadPixels(new Rect(0, 0, 1024, 1024), 0, 0);
+        result.Apply();
+        RenderTexture.active = active;
+
+        Object.DestroyImmediate(renderMat);
+        Object.DestroyImmediate(rt);
+
+        return result;
+
     }
 
     /// <summary>
     /// 绘制棋盘格
     /// </summary>
     /// <param name="rect"></param>
-    private void DrawCheckerBoard(Rect rect)
+    /// <param name="offsetScale"></param>
+    private static void DrawCheckerBoard(Rect rect, Vector4 offsetScale, Texture2D backGround)
     {
         //该矩阵将UV托盘中的坐标转换为一个无量纲空间，其坐标在托盘内xy范围均为0-1，用于裁剪托盘外渲染的物体
-        m_CheckerBoardMaterial.SetMatrix("clipMatrix", GetGUIClipMatrix(rect));
+        CheckerBoardMaterial.SetMatrix("clipMatrix", GetGUIClipMatrix(rect));
+        if (backGround)
+        {
+            CheckerBoardMaterial.SetTexture("_MainTex", backGround);
+            CheckerBoardMaterial.SetFloat("_Alpha", 1.0f);
+        }
+        else
+        {
+            CheckerBoardMaterial.SetTexture("_MainTex", null);
+            CheckerBoardMaterial.SetFloat("_Alpha", 0.0f);
+        }
 
         //该矩阵用于实际绘制棋盘格
-        Matrix4x4 matrix = RefreshMatrix(rect);
-        m_CheckerBoardMaterial.SetPass(0);
-        Graphics.DrawMeshNow(m_CheckerBoard, matrix);
+        Matrix4x4 matrix = GetDrawMatrix(rect, offsetScale);
+        CheckerBoardMaterial.SetPass(0);
+        Graphics.DrawMeshNow(CheckerBoard, matrix);
     }
 
-    private void DrawUV(Rect rect, int uvID, Color color)
+    private static void DrawUVMesh(Rect rect, Vector4 offsetScale, GameObject gameObject, int uvID, bool lightMapLayoutMode, int lightMapIndex, Color color)
     {
-        m_BoardLineMaterial.SetColor("_Color", color);
-        DrawUVMesh(rect, uvID, 0);
+        UVMaterial.SetColor("_Color", color);
+        DrawMesh(rect, offsetScale, gameObject, uvID, lightMapLayoutMode, lightMapIndex, 0);
     }
 
-    private void DrawVertexColor(Rect rect, int uvID)
+    private static void DrawVertexColorMesh(Rect rect, Vector4 offsetScale, GameObject gameObject, int uvID, bool lightMapLayoutMode, int lightMapIndex)
     {
-        DrawUVMesh(rect, uvID, 1);
-    }
-
-    private void SetTextureInternal(Texture texture)
-    {
-        if (texture)
-        {
-            m_CheckerBoardMaterial.SetTexture("_MainTex", texture);
-            m_CheckerBoardMaterial.SetFloat("_Alpha", 1);
-        }
+        DrawMesh(rect, offsetScale, gameObject, uvID, lightMapLayoutMode, lightMapIndex, 1);
     }
 
     /// <summary>
-    /// 绘制UV
+    /// 绘制Mesh
     /// </summary>
     /// <param name="rect"></param>
     /// <param name="uvID">UVID</param>
-    private void DrawUVMesh(Rect rect, int uvID, int pass)
+    private static void DrawMesh(Rect rect, Vector4 offsetScale, GameObject gameObject, int uvID, bool lightMapLayoutMode, int lightMapIndex, int pass)
     {
+        Mesh mesh = GetMesh(gameObject);
+        if(!mesh)
+            return;
+        Renderer renderer = gameObject.GetComponent<Renderer>();
+        if (!renderer)
+            return;
 
         Matrix4x4 matrix = default(Matrix4x4);
         //计算并设置裁剪矩阵
-        m_BoardLineMaterial.SetMatrix("clipMatrix", GetGUIClipMatrix(rect));
+        UVMaterial.SetMatrix("clipMatrix", GetGUIClipMatrix(rect));
+
+        //UVMaterial.SetPass(pass);
+        //matrix = GetDrawMatrix(rect, offsetScale);
+        //Graphics.DrawMeshNow(mesh, matrix);
 
         //非光照贴图布局模式下直接计算绘制矩阵
-        if (!m_LightMapLayoutMode)
-            matrix = RefreshMatrix(rect);
-        for (int i = 0; i < m_UVDatas.Count; i++)
-        {
-            if (m_UVDatas[i].disable)
-                continue;
-            if (m_UVDatas[i].target == null)
-                continue;
-            m_BoardLineMaterial.SetPass(pass);
-            Mesh mesh = null;
-            if (m_LightMapLayoutMode)
-            {
-                //光照贴图布局模式下需要根据每个Renderer的LightMapScaleOffset来计算绘制矩阵
-                Renderer renderer = m_UVDatas[i].target.GetComponent<Renderer>();
-                if (renderer.lightmapIndex != LightMapIndex)
-                    continue;
-                Vector4 lmST = renderer.lightmapScaleOffset;
+        if (!lightMapLayoutMode)
+            matrix = GetDrawMatrix(rect, offsetScale);
+        UVMaterial.SetPass(pass);
+        
 
-                matrix =
-                    RefreshMatrix(rect, lmST.z, lmST.w, lmST.x, lmST.y);
-                mesh = m_UVDatas[i].uvMeshs[1];
-                if (mesh == null)
-                    mesh = m_UVDatas[i].uvMeshs[0];
+        if (lightMapLayoutMode)
+        {
+            //光照贴图布局模式下需要根据每个Renderer的LightMapScaleOffset来计算绘制矩阵
+            if (renderer.lightmapIndex != lightMapIndex)
+                return;
+            Vector4 lmST = renderer.lightmapScaleOffset;
+
+            matrix =
+                GetDrawMatrix(rect, offsetScale, lmST.z, lmST.w, lmST.x, lmST.y);
+            if (CheckUV(mesh, 1))
+            {
+                UVMaterial.SetFloat("_UVIndex", 1.5f);
             }
             else
             {
-                mesh = m_UVDatas[i].uvMeshs[uvID];
+                if (CheckUV(mesh, 0))
+                {
+                    UVMaterial.SetFloat("_UVIndex", 0.5f);
+                }
+                else
+                {
+                    return;
+                }
             }
-            if (mesh)
-                Graphics.DrawMeshNow(mesh, matrix);
         }
-    }
-
-    private void CreateUVData(GameObject gameObject)
-    {
-        if (gameObject && gameObject.activeSelf)
+        else
         {
-            UVData uvData = UVData.CreateUVData(gameObject);
-            if (uvData != null)
-                m_UVDatas.Add(uvData);
+            if (!CheckUV(mesh, uvID))
+                return;
+            UVMaterial.SetFloat("_UVIndex", 0.5f + uvID);
         }
+        if (mesh)
+            Graphics.DrawMeshNow(mesh, matrix);
+        
     }
 
-    private GameObject GetRender(GameObject gameObject)
-    {
-        SkinnedMeshRenderer skinned = gameObject.GetComponent<SkinnedMeshRenderer>();
-        if (skinned)
-            return gameObject;
-        MeshFilter mf = gameObject.GetComponent<MeshFilter>();
-        if (mf)
-            return gameObject;
-        return null;
-    }
-
-    private List<GameObject> GetRenderers(GameObject gameObject, List<GameObject> collect = null)
+    private static Mesh GetMesh(GameObject gameObject)
     {
         if (gameObject == null)
-            return collect;
-        var go = GetRender(gameObject);
-        if (go != null)
+            return null;
+        SkinnedMeshRenderer skinnedMeshRenderer = gameObject.GetComponent<SkinnedMeshRenderer>();
+        Mesh mesh = null;
+        if (!skinnedMeshRenderer)
         {
-            if (collect == null)
-                collect = new List<GameObject>();
-            collect.Add(go);
+            MeshFilter mf = gameObject.GetComponent<MeshFilter>();
+            mesh = mf ? mf.sharedMesh : null;
         }
-        if (gameObject.transform.childCount > 0)
+        else
         {
-            for (int i = 0; i < gameObject.transform.childCount; i++)
-            {
-                var child = gameObject.transform.GetChild(i);
-                collect = GetRenderers(child.gameObject, collect);
-            }
+            mesh = skinnedMeshRenderer.sharedMesh;
         }
-        return collect;
+
+        return mesh;
     }
 
-    private void ListenEvent(Rect rect)
+    private static bool CheckUV(Mesh mesh, int uvIndex)
     {
-        if (Event.current.type == EventType.MouseDown && Event.current.button == 2)
-        {
-            if (rect.Contains(Event.current.mousePosition))
-            {
-                m_IsDragging = true;
-                Event.current.Use();
-            }
-        }
-        if (Event.current.type == EventType.ScrollWheel)
-        {
-            if (rect.Contains(Event.current.mousePosition))
-            {
-                float dt = Event.current.delta.y;
-                uvPanelScale -= Vector2.one * dt * 0.03f;
-                Event.current.Use();
-            }
-        }
-        if (Event.current.type == EventType.MouseDrag && m_IsDragging)
-        {
-            uvPanelPosition += Event.current.delta;
-            Event.current.Use();
-        }
-        if (Event.current.type == EventType.MouseUp && m_IsDragging)
-        {
-            m_IsDragging = false;
-            Event.current.Use();
-        }
+        if (uvIndex < 0 || uvIndex >= 4)
+            return false;
+        if (!mesh)
+            return false;
+        if (uvIndex == 0 && mesh.uv.Length > 0)
+            return true;
+        if (uvIndex == 1 && mesh.uv2.Length > 0)
+            return true;
+        if (uvIndex == 2 && mesh.uv3.Length > 0)
+            return true;
+        if (uvIndex == 3 && mesh.uv4.Length > 0)
+            return true;
+        return false;
     }
 
     /// <summary>
-    /// 绘制矩阵计算
+    /// 计算绘制区域矩阵
     /// </summary>
     /// <param name="r"></param>
+    /// <param name="offsetScale"></param>
     /// <param name="x"></param>
     /// <param name="y"></param>
     /// <param name="w"></param>
     /// <param name="h"></param>
     /// <returns></returns>
-    private Matrix4x4 RefreshMatrix(Rect r, float x = 0, float y = 0, float w = 1, float h = 1)
+    private static Matrix4x4 GetDrawMatrix(Rect r, Vector4 offsetScale, float x = 0, float y = 0, float w = 1, float h = 1)
     {
         //该矩阵会在绘制区域r发生变化时更新，并根据r的宽高比自适应绘制区域
-        r.x = r.x - (uvPanelScale.x - 1) * r.width / 2;
-        r.y = r.y - (uvPanelScale.y - 1) * r.height / 2;
-        r.x += uvPanelPosition.x;
-        r.y += uvPanelPosition.y;
-        r.width *= uvPanelScale.x;
-        r.height *= uvPanelScale.y;
+        r.x = r.x - (offsetScale.z - 1) * r.width / 2;
+        r.y = r.y - (offsetScale.w - 1) * r.height / 2;
+        r.x += offsetScale.x;
+        r.y += offsetScale.y;
+        r.width *= offsetScale.z;
+        r.height *= offsetScale.w;
         return GetGUISquareMatrix(r, x, y, w, h);
     }
 
